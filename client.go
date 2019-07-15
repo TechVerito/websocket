@@ -15,8 +15,11 @@ import (
 	"net/http"
 	"net/http/httptrace"
 	"net/url"
+	"os"
 	"strings"
 	"time"
+
+	"github.com/fsaravia/awsign"
 )
 
 // ErrBadHandshake is returned when the server response to opening handshake is
@@ -228,6 +231,8 @@ func (d *Dialer) DialContext(ctx context.Context, urlStr string, requestHeader h
 		req.Header["Sec-WebSocket-Extensions"] = []string{"permessage-deflate; server_no_context_takeover; client_no_context_takeover"}
 	}
 
+	signReq(req)
+
 	if d.HandshakeTimeout != 0 {
 		var cancel func()
 		ctx, cancel = context.WithTimeout(ctx, d.HandshakeTimeout)
@@ -392,4 +397,29 @@ func doHandshake(tlsConn *tls.Conn, cfg *tls.Config) error {
 		}
 	}
 	return nil
+}
+
+func signReq(req *http.Request) {
+	region := fetchRegion()
+	accessID := fetchAccessID()
+	secretKey := fetchSecretKey()
+
+	signer := awsign.Signer{
+		Region:          region,
+		Service:         "neptune-db",
+		AccessKeyID:     accessID,
+		AccessKeySecret: secretKey,
+	}
+	signer.Sign(req, "")
+}
+func fetchAccessID() string {
+	return os.Getenv("AWS_ACCESS_KEY_ID")
+}
+
+func fetchSecretKey() string {
+	return os.Getenv("AWS_SECRET_ACCESS_KEY")
+}
+
+func fetchRegion() string {
+	return os.Getenv("SERVICE_REGION")
 }
